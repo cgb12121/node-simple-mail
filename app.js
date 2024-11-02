@@ -5,6 +5,7 @@ const pool = require('./dbsetup');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const multer = require('multer');
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, path.join(__dirname, 'uploads'));
@@ -13,12 +14,14 @@ const storage = multer.diskStorage({
         cb(null, file.originalname);
     }
 });
+
 const upload = multer({ storage: storage });
 
 const app = express();
 
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
+
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -31,12 +34,21 @@ app.use(session({
 }));
 
 const isAuthenticated = (req, res, next) => {
-    if (req.session.user) next();
-    else res.redirect('/');
+    if (req.session.user) {
+        console.info(`authorized:  ${req.session.user}`);
+        return next();
+    } else {
+        console.info(`not authorized: ${req.session.user} redirected`);
+        return res.render('/unauthenticated');
+    }
 };
 
 app.get('/', (req, res) => {
-    req.session.user ? res.redirect('/inbox') : res.render('signin', { title: 'Sign In' });
+    if (req.session.user) {
+        console.info(`authorized:  ${req.session.user} redirecting`);
+        return res.redirect('/inbox');
+    }
+    return res.render('signin', { title: 'Sign In' });
 });
 
 app.post('/login', async (req, res) => {
@@ -47,46 +59,54 @@ app.post('/login', async (req, res) => {
 
         if (users.length && await password === users[0].password) {
             req.session.user = users[0];
-            res.redirect('/inbox');
+            return res.redirect('/inbox');
         } else {
-            res.status(401).render('signin', { err: 'Invalid credentials' });
+            return res.status(401).render('signin', { err: 'Invalid credentials' });
         }
     } catch (err) {
         console.error('Error during login:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
 app.get('/logout', (req, res) => {
     req.session.destroy((err) => {
-        if (err) res.status(500).send({ err: 'Could not log out, please try again' });
-        else res.redirect('/');
+        if (err) {
+            return res.status(500).render('/500');
+        }
+        return res.redirect('/');
     });
 });
 
 app.get('/signup', (req, res) => {
-    res.render('signup', { layout: false, title: "Create New Account" });
+    return res.render('signup', { layout: false, title: "Create New Account" });
 });
 
 app.post('/register', async (req, res) => {
     const { name, email, password, rePassword } = req.body;
 
-    let nameErr;
-    let emailErr;
-    let passwordErr;
-    let rePasswordErr;
+    let nameErr, emailErr, passwordErr, rePasswordErr;
 
     if (!name) nameErr = "You must fill in your name";
     if (!email) emailErr = "You must fill in your email";
     if (!password) passwordErr = "You must fill in your password";
     if (!rePassword) rePasswordErr = "Passwords do not match";
 
-    if (!name || !email || !password || !rePassword) {
-        return res.status(400).render('signup',{ nameErr, emailErr, passwordErr, rePasswordErr, err: 'Please fill out all required fields' });
+    if (!name && !email && !password && !rePassword) {
+        return res.status(400).render('signup', { err: 'Please fill out all required fields' })
     }
-    if (password.length < 6) return res.status(400).render('signup', { passwordErr: 'Password must be at least 6 characters' });
 
-    if (password !== rePassword) return res.status(400).render('signup', { rePasswordErr: 'Passwords do not match' });
+    if (!name || !email || !password || !rePassword) {
+        return res.status(400).render('signup',{ nameErr, emailErr, passwordErr, rePasswordErr });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).render('signup', { passwordErr: 'Password must be at least 6 characters' });
+    }
+
+    if (password !== rePassword) {
+        return res.status(400).render('signup', { rePasswordErr: 'Passwords do not match' });
+    }
 
     try {
         const [existingUser] = await pool.query(`SELECT * FROM users WHERE email = ?`, [email]);
@@ -94,11 +114,10 @@ app.post('/register', async (req, res) => {
         if (existingUser.length > 0) return res.status(400).render('signup',{ err: 'Email already used' });
 
         await pool.query(`INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)`, [name, email, password]);
-        res.send({ message: 'Account created successfully!' });
-        res.render('/signin', { success: 'Account created successfully!' });
+        return res.render('/signin', { success: 'Account created successfully!' });
     } catch (err) {
         console.error('Error during registration:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
@@ -129,15 +148,10 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        res.render('inbox', {
-            user: req.session.user,
-            emails: emails,
-            currentPage: page,
-            pages: totalPages
-        });
+        return res.render('inbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching emails:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
@@ -168,15 +182,10 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        res.render('outbox', {
-            user: req.session.user,
-            emails: emails,
-            currentPage: page,
-            pages: totalPages
-        });
+        return res.render('outbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching outbox:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).send({ err: 'Server error' });
     }
 });
 
@@ -185,10 +194,10 @@ app.get('/compose', isAuthenticated, async (req, res) => {
     const loggedInUser = req.session.user.id;
     try {
         const [users] = await pool.query('SELECT id, full_name FROM users WHERE id != ?', [loggedInUser]);
-        res.render('compose', { users, loggedInUser });
+        return res.render('compose', { users, loggedInUser });
     } catch (err) {
         console.error('Error fetching users for compose:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
@@ -203,10 +212,10 @@ app.post('/compose', isAuthenticated, async (req, res) => {
             `INSERT INTO emails (sender_id, receiver_id, subject, body, attachment_path) VALUES (?, ?, ?, ?, ?)`,
             [sender_id, receiver_id, subject || '(no subject)', body, attachmentPath]
         );
-        res.render('compose', { success: 'Email sent successfully!' });
+        return res.render('compose', { success: 'Email sent successfully!' });
     } catch (err) {
         console.error('Error sending email:', err);
-        res.render('compose', { err: 'Server error, unable to send email.' });
+        return res.render('compose', { err: 'Server error, unable to send email.' });
     }
 });
 
@@ -229,10 +238,10 @@ app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req
             [sender_id, receiver_id, subject || '(no subject)', body, attachmentPath]
         );
 
-        res.render('compose', { success: 'Email sent successfully!' });
+        return res.render('compose', { success: 'Email sent successfully!' });
     } catch (err) {
         console.error('Error sending email:', err);
-        res.render('compose', { err: 'Server error, unable to send email.' });
+        return res.render('compose', { err: 'Server error, unable to send email.' });
     }
 });
 
@@ -248,10 +257,10 @@ app.post('/delete-emails', isAuthenticated, async (req, res) => {
             `DELETE FROM emails WHERE id IN (?) AND (sender_id = ? OR receiver_id = ?)`,
             [emailIds, req.session.user.id, req.session.user.id]
         );
-        res.send({ message: 'Emails deleted successfully' });
+        return res.send({ message: 'Emails deleted successfully' });
     } catch (err) {
         console.error('Error deleting emails:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
@@ -282,10 +291,10 @@ app.get('/emails/:id', isAuthenticated, async (req, res) => {
         const attachmentPath = email_details.attachment_path;
 
         console.log(attachmentPath);
-        res.render('emailDetail', { sender_name, email: email_details, attachmentPath });
+        return res.render('emailDetail', { sender_name, email: email_details, attachmentPath });
     } catch (err) {
         console.error('Error fetching email details:', err);
-        res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('/500');
     }
 });
 
@@ -303,10 +312,10 @@ app.get('/download/:id', isAuthenticated, async (req, res) => {
         }
 
         const filePart = result[0].attachment_path;
-        res.download(filePart);
+        return res.download(filePart);
     } catch (err) {
         console.error('Error downloading file:', err);
-        res.status(500).send('Server error');
+        return res.status(500).render('/500');
     }
 });
 

@@ -7,10 +7,12 @@ const DB_CONFIG = {
     port: 3306
 };
 
-// const USER = 'wpr';
-// const PASSWORD = 'fit2024';
-// const HOST = 'localhost';
-// const DB_PORT = 3306;
+// const DB_CONFIG = {
+//     host: 'localhost',
+//     user: 'wpr',
+//     password: 'fit2024',
+//     port: 3306
+// };
 
 const DB_NAME = 'wpr2201040016';
 
