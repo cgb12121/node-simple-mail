@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outbox</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 600px; margin: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Outbox</h2>
+
+    <!-- Display user's full name and sign out link -->
+    <p>Welcome, <%= user.full_name %>! [<a href="/logout">Sign Out</a>] | [<a href="/compose">Compose</a>] | [<a href="/inbox">Inbox</a>]</p>
+
+    <!-- Emails list -->
+    <table>
+        <tr><th>Select</th><th>Recipient</th><th>Subject</th><th>Date Sent</th></tr>
+
+        <% emails.forEach(email => { %>
+            <tr data-email-id="<%= email.id %>">
+                <td><input type="checkbox" class="email-checkbox"></td>
+                <td><%= email.recipient_name %></td>
+                <td><a href="/emails/<%= email.id %>"><%= email.subject || '(no subject)' %></a></td>
+                <td><%= new Date(email.created_at).toLocaleString() %></td>
+            </tr>
+        <% }); %>
+    </table>
+
+    <!-- Pagination -->
+    <% if (pages > 1) { %>
+        <div class="pagination">
+            <% for (let i = 1; i <= pages; i++) { %>
+                <% if (i === currentPage) { %>
+                    <strong><%= i %></strong>
+                <% } else { %>
+                    <a href="/outbox?page=<%= i %>"><%= i %></a>
+                <% } %>
+            <% } %>
+        </div>
+    <% } %>
+
+    <!-- Delete button -->
+    <button id="deleteEmails">Delete Selected Emails</button>
+</div>
+
+<script>
+    document.getElementById('deleteEmails').addEventListener('click', function() {
+        const selectedEmails = Array.from(document.querySelectorAll('.email-checkbox:checked')).map(checkbox => checkbox.closest('tr').dataset.emailId);
+
+        fetch('/delete-emails', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ emailIds: selectedEmails })
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Detail</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 600px; margin: auto; padding: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2><%= email.subject || '(no subject)' %></h2>
+
+    <p><strong>From:</strong> <%= sender_name %></p>
+
+    <p><strong>Sent:</strong> <%= new Date(email.created_at).toLocaleString() %></p>
+
+    <p><strong>Body:</strong> <pre><%= email.body %></pre></p>
+
+    <% if (email.attachment_path) { %>
+        <% const fileName = email.attachment_path.split('/').pop(); %>
+        <p><strong>Attachment:</strong> <a href="/download/<%= email.id %>"><%= fileName %></a></p>
+    <% } else { %>
+        <p><strong>Attachment:</strong> None</p>
+    <% } %>
+
+    <p><a href="/inbox">Back to Inbox</a></p>
+
+</div>
+
+</body>
+</html>

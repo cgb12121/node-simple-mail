@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compose Email</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 600px; margin: auto; padding: 20px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Compose Email</h2>
+
+    <form id="upload" action="/send-email" method="POST" enctype="multipart/form-data">
+
+        <label for='recipient'>To:</label><br />
+        <input type='text' id='recipient' name='recipient' required placeholder="Enter recipient email"><br /><br />
+
+        <label for='subject'>Subject:</label><br />
+        <input type='text' id='subject' name='subject'><br /><br />
+
+        <label for='body'>Body:</label><br />
+        <textarea id='body' name='body' rows='5' cols='40'></textarea><br /><br />
+
+        <label for='attachment'>Attach a file:</label><br />
+        <input type='file' id='attachment' name='attachment'><br /><br />
+
+        <button type='submit'>Send Email</button>
+
+    </form>
+
+    <% var err;
+    if (err) { %>
+        <div class="error"><%= err %></div>
+    <% } else var success;
+    if (success) { %>
+        <div style="color: green;"><%= success %></div>
+    <% } %>
+
+    <p><a href='/inbox'>Back to Inbox</a></p>
+
+</div>
+</body >
+</html >

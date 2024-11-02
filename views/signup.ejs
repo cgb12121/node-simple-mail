@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { width: 300px; margin: auto; padding: 20px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Create Account</h2>
+    <form action="/register" method="POST">
+        <label for="name">Full Name:</label><br>
+        <input type="text" id="name" name="name" ><br><br>
+        <% var nameErr;
+        if (nameErr) { %>
+            <div class="error"><%= nameErr %></div>
+        <% } %>
+        <label for="email">Email:</label><br>
+        <input type="email" id="email" name="email" ><br><br>
+        <% var emailErr;
+        if (emailErr) { %>
+            <div class="error"><%= emailErr %></div>
+        <% } %>
+        <label for="password">Password:</label><br>
+        <input type="password" id="password" name="password" ><br><br>
+        <% var passwordErr;
+        if (passwordErr) { %>
+            <div class="error"><%= passwordErr %></div>
+        <% } %>
+        <label for="rePassword">Re-enter Password:</label><br>
+        <input type="password" id="rePassword" name="rePassword" ><br><br>
+        <% var rePasswordErr;
+        if (rePasswordErr) { %>
+            <div class="error"><%= rePasswordErr %></div>
+        <% } %>
+        <button type="submit">Create Account</button>
+    </form>
+    <% var err;
+    if (err) { %>
+        <div class="error"><%= err %></div>
+    <% } %>
+    <p>Already have an account? <a href="/">Sign in here</a></p>
+</div>
+</body>
+</html>
