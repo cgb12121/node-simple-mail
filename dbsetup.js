@@ -21,7 +21,6 @@ const pool = mysql.createPool(DB_CONFIG);
 async function createDatabase(connection) {
     await connection.query(`CREATE DATABASE IF NOT EXISTS ${DB_NAME}`);
     await connection.query(`USE ${DB_NAME}`);
-    console.log(`Database '${DB_NAME}' is ready`);
 }
 
 async function createTables(connection) {
@@ -59,7 +58,6 @@ async function createTables(connection) {
 
     for (const table of tables) {
         await connection.query(table.sql);
-        console.log(`${table.name} table created or already exists`);
     }
 }
 
@@ -78,9 +76,6 @@ async function insertSampleData(connection) {
             ('UserThree', 'c@c.com', 'password2');
         `;
         await connection.query(sampleUsersSql);
-        console.log('Sample users inserted');
-    } else {
-        console.log('Users table already contains data, skipping sample users insertion');
     }
 
     if (emailCount === 0) {
@@ -130,9 +125,6 @@ async function insertSampleData(connection) {
         `;
 
         await connection.query(sampleEmailsSql);
-        console.log('Sample emails inserted');
-    } else {
-        console.log('Emails table already contains data, skipping sample emails insertion');
     }
 }
 
@@ -140,17 +132,15 @@ async function setupDatabase() {
     let connection;
     try {
         connection = await pool.getConnection();
-        console.log('Connected to the database');
 
         await createDatabase(connection);
         await createTables(connection);
         await insertSampleData(connection);
     } catch (err) {
-        console.error('Error during database setup:', err);
+        console.error('Error during database setup: ', err);
     } finally {
         if (connection) {
             connection.release();
-            console.log('Connection released');
         }
     }
 }

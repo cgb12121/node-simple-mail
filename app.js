@@ -459,28 +459,37 @@ app.get('/signup', (req, res) => {
 
 app.get('/signin', (req, res) => {
     return res.render('signin', { title: 'Sign In' });
-})
+});
+
+app.get('/home', (req, res) => {
+    const user = req.signedCookies[COOKIE_NAME];
+    if (user) {
+        return res.render('home', { user: user.email });
+    } else {
+        return res.render('home', { user: undefined });
+    }
+});
 
 /**
  * Test 401 error page
  */
 app.get('/access_denied', (req, res) => {
     return res.render('401');
-})
+});
 
 /**
  * Test 404 error page
  */
 app.get('/not_found', (req, res) => {
     return res.render('404');
-})
+});
 
 /**
  * Test 500 error page
  */
 app.get('/server_error', (req, res) => {
     return res.render('500');
-})
+});
 
 const PORT = 8000;
 app.listen(PORT, (err) => {

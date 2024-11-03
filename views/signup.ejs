@@ -39,12 +39,11 @@
 
         .container {
             width: 300px;
-            margin: auto;
             padding: 20px;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-top: 50px;
+            margin: 50px auto auto;
         }
 
         .error {
@@ -99,10 +98,10 @@
 <header>
     <nav>
         <div>
-            <h2 style="margin: 0;">Email System</h2>
+            <h2 style="margin: 0;">Hanu Email</h2>
         </div>
         <div>
-            <a href="/">Home</a>
+            <a href="/home">Home</a>
             <a href="/signin">Sign In</a>
         </div>
     </nav>
@@ -149,7 +148,6 @@
             <div class="error"><%= err %></div>
             <br>
         <% } %>
-        <br>
 
         <button type="submit">Create Account</button>
     </form>

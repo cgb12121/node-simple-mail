@@ -49,6 +49,12 @@
 
         .jumbotron h1 {
             margin-bottom: 20px;
+            color: #333;
+        }
+
+        .jumbotron p {
+            font-size: 18px;
+            color: #666;
         }
 
         .btn {
@@ -58,6 +64,7 @@
             padding: 10px 20px;
             text-decoration: none;
             border-radius: 5px;
+            transition: background-color 0.3s;
         }
 
         .btn:hover {
@@ -68,9 +75,13 @@
             text-align: center;
             padding: 20px;
             background-color: #f1f1f1;
-            position: relative;
+            position: absolute;
             bottom: 0;
             width: 100%;
+        }
+
+        .welcome-message {
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -81,21 +92,40 @@
     <nav>
         <div>
             <h2 style="margin: 0;">
-                Email System
+                <% if (user) { %>
+                    Welcome, <%= user %>
+                <% } else { %>
+                    Welcome, Guest
+                <% } %>
             </h2>
         </div>
         <div>
-            <a href="/signin">Sign In</a>
+            <% if (user) { %>
+                <a href="/inbox">Inbox</a>
+                <a href="/outbox">Outbox</a>
+                <a href="/compose">Compose</a>
+                <a href="/logout">Log Out</a>
+            <% } else { %>
+                <a href="/signin">Sign In</a>
+            <% } %>
         </div>
     </nav>
 </header>
 
 <main>
     <div class="jumbotron">
+        <% if (!user) { %>
         <h1>Welcome to Our Email System</h1>
         <p>Manage your emails efficiently and securely.</p>
         <a href="/signin" class="btn">Sign In</a>
-    </div>
+        <% } else { %>
+        <h1>Your Inbox Awaits!</h1>
+        <p>Check your messages and stay connected with ease.</p>
+        <div class="welcome-message">
+            <p>Explore your inbox now!</p>
+            <a href="/inbox" class="btn">Go to Inbox</a>
+            <% } %>
+        </div>
 </main>
 
 <footer>
