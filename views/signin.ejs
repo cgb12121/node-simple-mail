@@ -8,6 +8,7 @@
         body { font-family: Arial, sans-serif; }
         .container { width: 300px; margin: auto; padding: 20px; }
         .error { color: red; }
+        .success { color: green; }
     </style>
 </head>
 <body>
@@ -23,6 +24,14 @@
     <% var err;
     if (err) { %>
         <div class="error"><%= err %></div>
+    <% } %>
+    <% var loggedOut;
+    if (loggedOut) { %>
+        <div class="success"><%= loggedOut %></div>
+    <% } %>
+    <% var signedUp;
+    if (signedUp) { %>
+        <div class="success"><%= signedUp %></div>
     <% } %>
     <p>Don't have an account? <a href="/signup">Sign up here</a></p>
 </div>

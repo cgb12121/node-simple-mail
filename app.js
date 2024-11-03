@@ -34,18 +34,15 @@ app.use(session({
 }));
 
 const isAuthenticated = (req, res, next) => {
-    if (req.session.user) {
-        console.info(`authorized:  ${req.session.user}`);
+    if (req.session.user || req.cookies.user) {
         return next();
     } else {
-        console.info(`not authorized: ${req.session.user} redirected`);
-        return res.render('/unauthenticated');
+        return res.status(401).render('401');
     }
 };
 
 app.get('/', (req, res) => {
-    if (req.session.user) {
-        console.info(`authorized:  ${req.session.user} redirecting`);
+    if (req.session.user || req.cookies.user) {
         return res.redirect('/inbox');
     }
     return res.render('signin', { title: 'Sign In' });
@@ -59,23 +56,26 @@ app.post('/login', async (req, res) => {
 
         if (users.length && await password === users[0].password) {
             req.session.user = users[0];
+            res.cookie('user', users[0].email, {
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000
+            });
             return res.redirect('/inbox');
         } else {
             return res.status(401).render('signin', { err: 'Invalid credentials' });
         }
     } catch (err) {
         console.error('Error during login:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
 
 app.get('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).render('/500');
-        }
-        return res.redirect('/');
+    Object.keys(req.cookies).forEach((cookie) => {
+        res.clearCookie(cookie);
     });
+    req.session.destroy();
+    return res.render('signin', { loggedOut: 'Logged out successfully' });
 });
 
 app.get('/signup', (req, res) => {
@@ -86,7 +86,6 @@ app.post('/register', async (req, res) => {
     const { name, email, password, rePassword } = req.body;
 
     let nameErr, emailErr, passwordErr, rePasswordErr;
-
     if (!name) nameErr = "You must fill in your name";
     if (!email) emailErr = "You must fill in your email";
     if (!password) passwordErr = "You must fill in your password";
@@ -105,7 +104,7 @@ app.post('/register', async (req, res) => {
     }
 
     if (password !== rePassword) {
-        return res.status(400).render('signup', { rePasswordErr: 'Passwords do not match' });
+        return res.status(400).render('signup', { rePasswordErr: 'Re-password does not match' });
     }
 
     try {
@@ -114,12 +113,50 @@ app.post('/register', async (req, res) => {
         if (existingUser.length > 0) return res.status(400).render('signup',{ err: 'Email already used' });
 
         await pool.query(`INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)`, [name, email, password]);
-        return res.render('/signin', { success: 'Account created successfully!' });
+        return res.render('signin', { signedUp: 'Account created successfully!' });
     } catch (err) {
         console.error('Error during registration:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
+
+/**
+ * This code fetch all the incoming emails form db (of that users)
+ * It does not check if the user deleted the email
+ */
+// app.get('/inbox', isAuthenticated, async (req, res) => {
+//     const userId = req.session.user.id;
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = 5;
+//     const offset = (page - 1) * limit;
+//
+//     try {
+//         const [emails] = await pool.query(
+//             `SELECT e.id, e.subject, e.created_at, u1.full_name AS sender_name
+//             FROM emails e
+//             JOIN users u1 ON e.sender_id = u1.id
+//             WHERE e.receiver_id = ?
+//             ORDER BY e.created_at DESC
+//             LIMIT ? OFFSET ?`,
+//             [userId, limit, offset]
+//         );
+//
+//         const [countResult] = await pool.query(
+//             `SELECT COUNT(*) AS count
+//             FROM emails
+//             WHERE receiver_id = ?`,
+//             [userId]
+//         );
+//
+//         const totalEmails = countResult[0].count;
+//         const totalPages = Math.ceil(totalEmails / limit);
+//
+//         return res.render('inbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
+//     } catch (err) {
+//         console.error('Error fetching emails:', err);
+//         return res.status(500).render('500');
+//     }
+// });
 
 app.get('/inbox', isAuthenticated, async (req, res) => {
     const userId = req.session.user.id;
@@ -130,33 +167,71 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
     try {
         const [emails] = await pool.query(
             `SELECT e.id, e.subject, e.created_at, u1.full_name AS sender_name
-            FROM emails e
-            JOIN users u1 ON e.sender_id = u1.id
-            WHERE e.receiver_id = ?
-            ORDER BY e.created_at DESC
-            LIMIT ? OFFSET ?`,
+             FROM emails e
+             JOIN users u1 ON e.sender_id = u1.id
+             WHERE e.receiver_id = ? AND e.deleted_by_receiver = FALSE
+             ORDER BY e.created_at DESC
+             LIMIT ? OFFSET ?`,
             [userId, limit, offset]
         );
 
         const [countResult] = await pool.query(
             `SELECT COUNT(*) AS count
-            FROM emails
-            WHERE receiver_id = ?`,
+             FROM emails
+             WHERE receiver_id = ? AND deleted_by_receiver = FALSE`,
             [userId]
         );
 
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('inbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
+        return res.render('inbox', { user: req.session.user, emails, currentPage: page, pages: totalPages });
     } catch (err) {
-        console.error('Error fetching emails:', err);
-        return res.status(500).render('/500');
+        console.error('Error fetching inbox:', err);
+        return res.status(500).render('500');
     }
 });
 
+/**
+ * This code fetch all the out coming emails form db (of that users)
+ * It does not check if the user deleted the email
+ */
+// app.get('/outbox', isAuthenticated, async (req, res) => {
+//     const currentUser = req.session.user.id;
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = 5;
+//     const offset = (page - 1) * limit;
+//
+//     try {
+//         const [emails] = await pool.query(
+//             `SELECT e.id, u.full_name AS recipient_name, e.subject, e.created_at
+//             FROM emails e
+//             JOIN users u ON e.receiver_id = u.id
+//             WHERE e.sender_id = ?
+//             ORDER BY e.created_at DESC
+//             LIMIT ? OFFSET ?`,
+//             [currentUser, limit, offset]
+//         );
+//
+//         const [countResult] = await pool.query(
+//             `SELECT COUNT(*) AS count
+//             FROM emails
+//             WHERE sender_id = ?`,
+//             [currentUser]
+//         );
+//
+//         const totalEmails = countResult[0].count;
+//         const totalPages = Math.ceil(totalEmails / limit);
+//
+//         return res.render('outbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
+//     } catch (err) {
+//         console.error('Error fetching outbox:', err);
+//         return res.status(500).render('500');
+//     }
+// });
+
 app.get('/outbox', isAuthenticated, async (req, res) => {
-    const currentUser = req.session.user.id;
+    const userId = req.session.user.id;
     const page = parseInt(req.query.page) || 1;
     const limit = 5;
     const offset = (page - 1) * limit;
@@ -164,31 +239,30 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
     try {
         const [emails] = await pool.query(
             `SELECT e.id, u.full_name AS recipient_name, e.subject, e.created_at
-            FROM emails e
-            JOIN users u ON e.receiver_id = u.id
-            WHERE e.sender_id = ?
-            ORDER BY e.created_at DESC
-            LIMIT ? OFFSET ?`,
-            [currentUser, limit, offset]
+             FROM emails e
+             JOIN users u ON e.receiver_id = u.id
+             WHERE e.sender_id = ? AND e.deleted_by_sender = FALSE
+             ORDER BY e.created_at DESC
+             LIMIT ? OFFSET ?`,
+            [userId, limit, offset]
         );
 
         const [countResult] = await pool.query(
             `SELECT COUNT(*) AS count
-            FROM emails
-            WHERE sender_id = ?`,
-            [currentUser]
+             FROM emails
+             WHERE sender_id = ? AND deleted_by_sender = FALSE`,
+            [userId]
         );
 
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('outbox', { user: req.session.user, emails: emails, currentPage: page, pages: totalPages });
+        return res.render('outbox', { user: req.session.user, emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching outbox:', err);
-        return res.status(500).send({ err: 'Server error' });
+        return res.status(500).render('500');
     }
 });
-
 
 app.get('/compose', isAuthenticated, async (req, res) => {
     const loggedInUser = req.session.user.id;
@@ -197,7 +271,7 @@ app.get('/compose', isAuthenticated, async (req, res) => {
         return res.render('compose', { users, loggedInUser });
     } catch (err) {
         console.error('Error fetching users for compose:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
 
@@ -245,8 +319,32 @@ app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req
     }
 });
 
+/**
+ * This code removed email completely from database when user click delete
+ * ==> Both won't be able to see that email again
+ * */
+// app.post('/delete-emails', isAuthenticated, async (req, res) => {
+//     const { emailIds } = req.body;
+//
+//     if (!emailIds || !Array.isArray(emailIds)) {
+//         return res.status(400).send({ err: 'Invalid email IDs' });
+//     }
+//
+//     try {
+//         await pool.query(
+//             `DELETE FROM emails WHERE id IN (?) AND (sender_id = ? OR receiver_id = ?)`,
+//             [emailIds, req.session.user.id, req.session.user.id]
+//         );
+//         return res.send({ message: 'Emails deleted successfully' });
+//     } catch (err) {
+//         console.error('Error deleting emails:', err);
+//         return res.status(500).render('500');
+//     }
+// });
+
 app.post('/delete-emails', isAuthenticated, async (req, res) => {
     const { emailIds } = req.body;
+    const userId = req.session.user.id;
 
     if (!emailIds || !Array.isArray(emailIds)) {
         return res.status(400).send({ err: 'Invalid email IDs' });
@@ -254,15 +352,56 @@ app.post('/delete-emails', isAuthenticated, async (req, res) => {
 
     try {
         await pool.query(
-            `DELETE FROM emails WHERE id IN (?) AND (sender_id = ? OR receiver_id = ?)`,
-            [emailIds, req.session.user.id, req.session.user.id]
+            `UPDATE emails
+             SET deleted_by_sender = CASE WHEN sender_id = ? THEN TRUE ELSE deleted_by_sender END,
+                 deleted_by_receiver = CASE WHEN receiver_id = ? THEN TRUE ELSE deleted_by_receiver END
+             WHERE id IN (?) AND (sender_id = ? OR receiver_id = ?)`,
+            [userId, userId, emailIds, userId, userId]
         );
+
         return res.send({ message: 'Emails deleted successfully' });
     } catch (err) {
         console.error('Error deleting emails:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
+
+/**
+ * This code still allows user to access deleted emails
+ */
+// app.get('/emails/:id', isAuthenticated, async (req, res) => {
+//     const emailId = req.params.id;
+//     const userId = req.session.user.id;
+//
+//     try {
+//         const [result] = await pool.query(
+//             `SELECT e.*, u1.full_name as sender, u2.full_name as receiver
+//             FROM emails e
+//             JOIN users u1 ON e.sender_id = u1.id
+//             JOIN users u2 ON e.receiver_id = u2.id
+//             WHERE e.id = ? AND (e.sender_id = ? OR e.receiver_id = ?)`,
+//             [emailId, userId, userId]
+//         );
+//
+//         if (result.length === 0) return res.status(404).send('Email not found');
+//         const email_details = result[0];
+//         const sender_id = email_details.sender_id;
+//
+//         const [sender] = await pool.query(
+//             `SELECT * FROM users WHERE id = ?`,
+//             [sender_id]
+//         );
+//
+//         const sender_name = sender[0].full_name;
+//         const attachmentPath = email_details.attachment_path;
+//
+//         console.log(attachmentPath);
+//         return res.render('emailDetail', { sender_name, email: email_details, attachmentPath });
+//     } catch (err) {
+//         console.error('Error fetching email details:', err);
+//         return res.status(500).render('500');
+//     }
+// });
 
 app.get('/emails/:id', isAuthenticated, async (req, res) => {
     const emailId = req.params.id;
@@ -271,30 +410,27 @@ app.get('/emails/:id', isAuthenticated, async (req, res) => {
     try {
         const [result] = await pool.query(
             `SELECT e.*, u1.full_name as sender, u2.full_name as receiver
-            FROM emails e
-            JOIN users u1 ON e.sender_id = u1.id
-            JOIN users u2 ON e.receiver_id = u2.id
-            WHERE e.id = ? AND (e.sender_id = ? OR e.receiver_id = ?)`,
-            [emailId, userId, userId]
+             FROM emails e
+             JOIN users u1 ON e.sender_id = u1.id
+             JOIN users u2 ON e.receiver_id = u2.id
+             WHERE e.id = ? AND (e.sender_id = ? OR e.receiver_id = ?)
+               AND ((e.receiver_id = ? AND e.deleted_by_receiver = FALSE) OR
+                    (e.sender_id = ? AND e.deleted_by_sender = FALSE))`,
+            [emailId, userId, userId, userId, userId]
         );
 
-        if (result.length === 0) return res.status(404).send('Email not found');
-        const email_details = result[0];
-        const sender_id = email_details.sender_id;
+        if (result.length === 0) return res.status(404).render('404');
 
-        const [sender] = await pool.query(
-            `SELECT * FROM users WHERE id = ?`,
-            [sender_id]
-        );
+        const emailDetails = result[0];
+        const senderId = emailDetails.sender_id;
 
-        const sender_name = sender[0].full_name;
-        const attachmentPath = email_details.attachment_path;
+        const [sender] = await pool.query(`SELECT * FROM users WHERE id = ?`, [senderId]);
+        const senderName = sender[0].full_name;
 
-        console.log(attachmentPath);
-        return res.render('emailDetail', { sender_name, email: email_details, attachmentPath });
+        return res.render('emailDetail', { sender_name: senderName, email: emailDetails, attachmentPath: emailDetails.attachment_path });
     } catch (err) {
         console.error('Error fetching email details:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
 
@@ -308,14 +444,14 @@ app.get('/download/:id', isAuthenticated, async (req, res) => {
         );
 
         if (result.length === 0 || !result[0].attachment_path) {
-            return res.status(404).send('File not found');
+            return res.status(404).render('404');
         }
 
         const filePart = result[0].attachment_path;
         return res.download(filePart);
     } catch (err) {
         console.error('Error downloading file:', err);
-        return res.status(500).render('/500');
+        return res.status(500).render('500');
     }
 });
 

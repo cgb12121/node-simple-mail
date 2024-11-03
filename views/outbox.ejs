@@ -17,10 +17,8 @@
 <div class="container">
     <h2>Outbox</h2>
 
-    <!-- Display user's full name and sign out link -->
     <p>Welcome, <%= user.full_name %>! [<a href="/logout">Sign Out</a>] | [<a href="/compose">Compose</a>] | [<a href="/inbox">Inbox</a>]</p>
 
-    <!-- Emails list -->
     <table>
         <tr><th>Select</th><th>Recipient</th><th>Subject</th><th>Date Sent</th></tr>
 
@@ -34,7 +32,6 @@
         <% }); %>
     </table>
 
-    <!-- Pagination -->
     <% if (pages > 1) { %>
         <div class="pagination">
             <% for (let i = 1; i <= pages; i++) { %>
@@ -47,7 +44,6 @@
         </div>
     <% } %>
 
-    <!-- Delete button -->
     <button id="deleteEmails">Delete Selected Emails</button>
 </div>
 
