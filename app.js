@@ -30,11 +30,20 @@ const isAuthenticated = (req, res, next) => {
     }
 };
 
-app.get('/', (req, res) => {
-    if (req.cookies[COOKIE_NAME]) {
-        return res.redirect('/inbox');
+app.get('', (req, res) => {
+    if (req.signedCookies[COOKIE_NAME]) {
+        return res.redirect('inbox');
+    } else {
+        return res.render('home');
     }
-    return res.render('signin', { title: 'Sign In' });
+});
+
+app.get('/', (req, res) => {
+    if (req.signedCookies[COOKIE_NAME]) {
+        return res.redirect('inbox');
+    } else {
+        return res.render('home');
+    }
 });
 
 app.post('/login', async (req, res) => {
@@ -57,15 +66,6 @@ app.post('/login', async (req, res) => {
         console.error('Error during login:', err);
         return res.status(500).render('500');
     }
-});
-
-app.get('/logout', (req, res) => {
-    res.clearCookie(COOKIE_NAME);
-    return res.render('signin', { loggedOut: 'Logged out successfully' });
-});
-
-app.get('/signup', (req, res) => {
-    return res.render('signup', { layout: false, title: "Create New Account" });
 });
 
 app.post('/register', async (req, res) => {
@@ -109,6 +109,7 @@ app.post('/register', async (req, res) => {
 /**
  * This code fetch all the incoming emails form db (of that users)
  * It does not check if the user deleted the email
+ * TODO: this is used SESSION!
  */
 // app.get('/inbox', isAuthenticated, async (req, res) => {
 //     const userId = req.session.user.id;
@@ -181,6 +182,7 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
 /**
  * This code fetch all the out coming emails form db (of that users)
  * It does not check if the user deleted the email
+ * TODO: this is used SESSION!
  */
 // app.get('/outbox', isAuthenticated, async (req, res) => {
 //     const currentUser = req.session.user.id;
@@ -251,10 +253,10 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
 });
 
 app.get('/compose', isAuthenticated, async (req, res) => {
-    const loggedInUser = req.signedCookies[COOKIE_NAME].id;
+    const loggedInUser = req.signedCookies[COOKIE_NAME];
     try {
-        const [users] = await pool.query('SELECT id, full_name FROM users WHERE id != ?', [loggedInUser]);
-        return res.render('compose', { users, loggedInUser });
+        const [users] = await pool.query('SELECT id, full_name FROM users WHERE id != ?', [loggedInUser.id]);
+        return res.render('compose', { user: loggedInUser.email, users, loggedInUser: loggedInUser.id });
     } catch (err) {
         console.error('Error fetching users for compose:', err);
         return res.status(500).render('500');
@@ -263,6 +265,7 @@ app.get('/compose', isAuthenticated, async (req, res) => {
 
 app.post('/compose', isAuthenticated, async (req, res) => {
     const { receiver_id, subject, body } = req.body;
+    const user = req.signedCookies[COOKIE_NAME];
     const sender_id = req.signedCookies[COOKIE_NAME].id;
     const savingPath = path.join(__dirname, req.attachment.name)
     const attachmentPath = req.attachment ? savingPath : null;
@@ -272,22 +275,23 @@ app.post('/compose', isAuthenticated, async (req, res) => {
             `INSERT INTO emails (sender_id, receiver_id, subject, body, attachment_path) VALUES (?, ?, ?, ?, ?)`,
             [sender_id, receiver_id, subject || '(no subject)', body, attachmentPath]
         );
-        return res.render('compose', { success: 'Email sent successfully!' });
+        return res.render('compose', { user: user.email, success: 'Email sent successfully!' });
     } catch (err) {
         console.error('Error sending email:', err);
-        return res.render('compose', { err: 'Server error, unable to send email.' });
+        return res.render('compose', { user: user.email, err: 'Server error, unable to send email.' });
     }
 });
 
 app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req, res) => {
     const { recipient, subject, body } = req.body;
+    const loggedInUser = req.signedCookies[COOKIE_NAME].email;
     const sender_id = req.signedCookies[COOKIE_NAME].id;
 
     try {
         const [existingUser] = await pool.query(`SELECT id FROM users WHERE email = ?`, [recipient]);
 
         if (!existingUser.length) {
-            return res.status(400).render('compose',{ err: 'Recipient not found' });
+            return res.status(400).render('compose',{ user: loggedInUser, err: 'Recipient not found' });
         }
 
         const receiver_id = existingUser[0].id;
@@ -298,16 +302,17 @@ app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req
             [sender_id, receiver_id, subject || '(no subject)', body, attachmentPath]
         );
 
-        return res.render('compose', { success: 'Email sent successfully!' });
+        return res.render('compose', { user: loggedInUser, success: 'Email sent successfully!' });
     } catch (err) {
         console.error('Error sending email:', err);
-        return res.render('compose', { err: 'Server error, unable to send email.' });
+        return res.render('compose', { user: loggedInUser, err: 'Server error, unable to send email.' });
     }
 });
 
 /**
  * This code removed email completely from database when user click delete
  * ==> Both won't be able to see that email again
+ * TODO: this is used SESSION!
  * */
 // app.post('/delete-emails', isAuthenticated, async (req, res) => {
 //     const { emailIds } = req.body;
@@ -354,6 +359,7 @@ app.post('/delete-emails', isAuthenticated, async (req, res) => {
 
 /**
  * This code still allows user to access deleted emails
+ * TODO: this is used SESSION!
  */
 // app.get('/emails/:id', isAuthenticated, async (req, res) => {
 //     const emailId = req.params.id;
@@ -391,6 +397,7 @@ app.post('/delete-emails', isAuthenticated, async (req, res) => {
 
 app.get('/emails/:id', isAuthenticated, async (req, res) => {
     const emailId = req.params.id;
+    const user = req.signedCookies[COOKIE_NAME];
     const userId = req.signedCookies[COOKIE_NAME].id;
 
     try {
@@ -413,7 +420,7 @@ app.get('/emails/:id', isAuthenticated, async (req, res) => {
         const [sender] = await pool.query(`SELECT * FROM users WHERE id = ?`, [senderId]);
         const senderName = sender[0].full_name;
 
-        return res.render('emailDetail', { sender_name: senderName, email: emailDetails, attachmentPath: emailDetails.attachment_path });
+        return res.render('emailDetail', { user: user.email, sender_name: senderName, email: emailDetails, attachmentPath: emailDetails.attachment_path });
     } catch (err) {
         console.error('Error fetching email details:', err);
         return res.status(500).render('500');
@@ -440,6 +447,40 @@ app.get('/download/:id', isAuthenticated, async (req, res) => {
         return res.status(500).render('500');
     }
 });
+
+app.get('/logout', (req, res) => {
+    res.clearCookie(COOKIE_NAME);
+    return res.render('signin', { loggedOut: 'Logged out successfully' });
+});
+
+app.get('/signup', (req, res) => {
+    return res.render('signup', { layout: false, title: "Create New Account" });
+});
+
+app.get('/signin', (req, res) => {
+    return res.render('signin', { title: 'Sign In' });
+})
+
+/**
+ * Test 401 error page
+ */
+app.get('/access_denied', (req, res) => {
+    return res.render('401');
+})
+
+/**
+ * Test 404 error page
+ */
+app.get('/not_found', (req, res) => {
+    return res.render('404');
+})
+
+/**
+ * Test 500 error page
+ */
+app.get('/server_error', (req, res) => {
+    return res.render('500');
+})
 
 const PORT = 8000;
 app.listen(PORT, (err) => {

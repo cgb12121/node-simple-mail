@@ -1,16 +1,16 @@
 const mysql = require('mysql2/promise');
 
 const DB_CONFIG = {
-    host: 'localhost',
     user: 'root',
     password: '123456',
+    host: 'localhost',
     port: 3306
 };
 
 // const DB_CONFIG = {
-//     host: 'localhost',
 //     user: 'wpr',
 //     password: 'fit2024',
+//     host: 'localhost',
 //     port: 3306
 // };
 

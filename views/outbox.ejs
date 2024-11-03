@@ -1,55 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Outbox</title>
     <style>
-        body { font-family: Arial, sans-serif; }
-        .container { width: 600px; margin: auto; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; }
-        th { background-color: #f2f2f2; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 0;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+        }
+
+        nav a:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+        }
+
+        .container {
+            width: 600px;
+            margin: auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 50px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        p {
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #c82333;
+        }
+
+        .pagination {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .pagination a,
+        .pagination button {
+            margin: 0 5px;
+            text-decoration: none;
+            color: #007bff;
+            padding: 8px 12px;
+            border-radius: 5px;
+            background-color: white;
+        }
+
+        .pagination a:hover,
+        .pagination button:hover {
+            background-color: #e9ecef;
+        }
+
+        .pagination strong {
+            font-weight: bold;
+            background-color: red;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+        }
+
+        .no-emails {
+            text-align:center;
+            margin-top:20px;
+            font-size :18px;
+            color:#666;
+        }
     </style>
 </head>
+
 <body>
+
+<header>
+    <nav>
+        <div>
+            <h2 style="margin: 0;"> <%= user %></h2>
+        </div>
+        <div>
+            <a href="/inbox">Inbox</a>
+            <a href="/compose">Compose</a>
+            <a href="/logout">Log Out</a>
+        </div>
+    </nav>
+</header>
 
 <div class="container">
     <h2>Outbox</h2>
 
-    <p>Welcome, <%= user.full_name %>! [<a href="/logout">Sign Out</a>] | [<a href="/compose">Compose</a>] | [<a href="/inbox">Inbox</a>]</p>
+    <% if (emails.length === 0) { %>
+        <p class="no-emails">You have no emails in your outbox.</p>
+    <% } else { %>
+        <table>
+            <tr><th>Select</th><th>Recipient</th><th>Subject</th><th>Date Sent</th></tr>
 
-    <table>
-        <tr><th>Select</th><th>Recipient</th><th>Subject</th><th>Date Sent</th></tr>
+            <% emails.forEach(email => { %>
+                <tr data-email-id="<%= email.id %>">
+                    <td><input type="checkbox" class="email-checkbox"></td>
+                    <td><%= email.recipient_name %></td>
+                    <td><a href="/emails/<%= email.id %>"><%= email.subject || '(no subject)' %></a></td>
+                    <td><%= new Date(email.created_at).toLocaleString() %></td>
+                </tr>
+            <% }); %>
+        </table>
 
-        <% emails.forEach(email => { %>
-            <tr data-email-id="<%= email.id %>">
-                <td><input type="checkbox" class="email-checkbox"></td>
-                <td><%= email.recipient_name %></td>
-                <td><a href="/emails/<%= email.id %>"><%= email.subject || '(no subject)' %></a></td>
-                <td><%= new Date(email.created_at).toLocaleString() %></td>
-            </tr>
-        <% }); %>
-    </table>
-
-    <% if (pages > 1) { %>
-        <div class="pagination">
-            <% for (let i = 1; i <= pages; i++) { %>
-                <% if (i === currentPage) { %>
-                    <strong><%= i %></strong>
-                <% } else { %>
-                    <a href="/outbox?page=<%= i %>"><%= i %></a>
+        <% if (pages > 1) { %>
+            <div class="pagination">
+                <% if (currentPage > 1) { %>
+                    <a href="/outbox?page=<%= currentPage - 1 %>">&lt;&lt;</a>
                 <% } %>
-            <% } %>
-        </div>
-    <% } %>
 
-    <button id="deleteEmails">Delete Selected Emails</button>
+                <% for (let i = 1; i <= pages; i++) { %>
+                    <% if (i === currentPage) { %>
+                        <strong><%= i %></strong>
+                    <% } else { %>
+                        <a href="/outbox?page=<%= i %>"><%= i %></a>
+                    <% } %>
+                <% } %>
+
+                <% if (currentPage < pages) { %>
+                    <a href="/outbox?page=<%= currentPage + 1 %>">&gt;&gt;</a>
+                <% } %>
+            </div>
+        <% } %>
+
+        <button id="deleteEmails">Delete Selected Emails</button>
+
+    <% } %>
 </div>
 
 <script>
     document.getElementById('deleteEmails').addEventListener('click', function() {
-        const selectedEmails = Array.from(document.querySelectorAll('.email-checkbox:checked')).map(checkbox => checkbox.closest('tr').dataset.emailId);
+        const selectedEmails = Array.from(document
+            .querySelectorAll('.email-checkbox:checked'))
+            .map(checkbox => checkbox.closest('tr').dataset.emailId);
 
         fetch('/delete-emails', {
             method: 'POST',
@@ -66,4 +208,5 @@
 </script>
 
 </body>
+
 </html>
