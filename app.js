@@ -1,20 +1,13 @@
 const express = require('express');
 const path = require('path');
-const logger = require('morgan');
 const pool = require('./dbsetup');
 const cookieParser = require('cookie-parser');
-const session = require('express-session');
 const multer = require('multer');
 
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, 'uploads'));
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.originalname);
-    }
+    destination:  (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+    filename:     (req, file, cb) => cb(null, file.originalname)
 });
-
 const upload = multer({ storage: storage });
 
 const app = express();
@@ -22,19 +15,15 @@ const app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(cookieParser("mySecretKey"));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
-    secret: 'mySecretKey',
-    resave: true,
-    saveUninitialized: false
-}));
+
+const COOKIE_NAME = 'user';
 
 const isAuthenticated = (req, res, next) => {
-    if (req.session.user || req.cookies.user) {
+    if (req.signedCookies[COOKIE_NAME]) {
         return next();
     } else {
         return res.status(401).render('401');
@@ -42,7 +31,7 @@ const isAuthenticated = (req, res, next) => {
 };
 
 app.get('/', (req, res) => {
-    if (req.session.user || req.cookies.user) {
+    if (req.cookies[COOKIE_NAME]) {
         return res.redirect('/inbox');
     }
     return res.render('signin', { title: 'Sign In' });
@@ -55,10 +44,10 @@ app.post('/login', async (req, res) => {
         const [users] = await pool.query(`SELECT * FROM users WHERE email = ?`, [email]);
 
         if (users.length && await password === users[0].password) {
-            req.session.user = users[0];
-            res.cookie('user', users[0].email, {
+            res.cookie(COOKIE_NAME, { id: users[0].id, email: users[0].email }, {
                 httpOnly: true,
-                maxAge: 24 * 60 * 60 * 1000
+                maxAge: 24 * 60 * 60 * 1000,
+                signed: true
             });
             return res.redirect('/inbox');
         } else {
@@ -71,10 +60,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-    Object.keys(req.cookies).forEach((cookie) => {
-        res.clearCookie(cookie);
-    });
-    req.session.destroy();
+    res.clearCookie(COOKIE_NAME);
     return res.render('signin', { loggedOut: 'Logged out successfully' });
 });
 
@@ -159,7 +145,7 @@ app.post('/register', async (req, res) => {
 // });
 
 app.get('/inbox', isAuthenticated, async (req, res) => {
-    const userId = req.session.user.id;
+    const user = req.signedCookies[COOKIE_NAME];
     const page = parseInt(req.query.page) || 1;
     const limit = 5;
     const offset = (page - 1) * limit;
@@ -172,20 +158,20 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
              WHERE e.receiver_id = ? AND e.deleted_by_receiver = FALSE
              ORDER BY e.created_at DESC
              LIMIT ? OFFSET ?`,
-            [userId, limit, offset]
+            [user.id, limit, offset]
         );
 
         const [countResult] = await pool.query(
             `SELECT COUNT(*) AS count
              FROM emails
              WHERE receiver_id = ? AND deleted_by_receiver = FALSE`,
-            [userId]
+            [user.id]
         );
 
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('inbox', { user: req.session.user, emails, currentPage: page, pages: totalPages });
+        return res.render('inbox', { user: user.email, emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching inbox:', err);
         return res.status(500).render('500');
@@ -231,7 +217,7 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
 // });
 
 app.get('/outbox', isAuthenticated, async (req, res) => {
-    const userId = req.session.user.id;
+    const user = req.signedCookies[COOKIE_NAME];
     const page = parseInt(req.query.page) || 1;
     const limit = 5;
     const offset = (page - 1) * limit;
@@ -244,20 +230,20 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
              WHERE e.sender_id = ? AND e.deleted_by_sender = FALSE
              ORDER BY e.created_at DESC
              LIMIT ? OFFSET ?`,
-            [userId, limit, offset]
+            [user.id, limit, offset]
         );
 
         const [countResult] = await pool.query(
             `SELECT COUNT(*) AS count
              FROM emails
              WHERE sender_id = ? AND deleted_by_sender = FALSE`,
-            [userId]
+            [user.id]
         );
 
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('outbox', { user: req.session.user, emails, currentPage: page, pages: totalPages });
+        return res.render('outbox', { user: user.email, emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching outbox:', err);
         return res.status(500).render('500');
@@ -265,7 +251,7 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
 });
 
 app.get('/compose', isAuthenticated, async (req, res) => {
-    const loggedInUser = req.session.user.id;
+    const loggedInUser = req.signedCookies[COOKIE_NAME].id;
     try {
         const [users] = await pool.query('SELECT id, full_name FROM users WHERE id != ?', [loggedInUser]);
         return res.render('compose', { users, loggedInUser });
@@ -277,7 +263,7 @@ app.get('/compose', isAuthenticated, async (req, res) => {
 
 app.post('/compose', isAuthenticated, async (req, res) => {
     const { receiver_id, subject, body } = req.body;
-    const sender_id = req.session.user.id;
+    const sender_id = req.signedCookies[COOKIE_NAME].id;
     const savingPath = path.join(__dirname, req.attachment.name)
     const attachmentPath = req.attachment ? savingPath : null;
 
@@ -295,7 +281,7 @@ app.post('/compose', isAuthenticated, async (req, res) => {
 
 app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req, res) => {
     const { recipient, subject, body } = req.body;
-    const sender_id = req.session.user.id;
+    const sender_id = req.signedCookies[COOKIE_NAME].id;
 
     try {
         const [existingUser] = await pool.query(`SELECT id FROM users WHERE email = ?`, [recipient]);
@@ -344,7 +330,7 @@ app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req
 
 app.post('/delete-emails', isAuthenticated, async (req, res) => {
     const { emailIds } = req.body;
-    const userId = req.session.user.id;
+    const userId = req.signedCookies[COOKIE_NAME].id;
 
     if (!emailIds || !Array.isArray(emailIds)) {
         return res.status(400).send({ err: 'Invalid email IDs' });
@@ -405,7 +391,7 @@ app.post('/delete-emails', isAuthenticated, async (req, res) => {
 
 app.get('/emails/:id', isAuthenticated, async (req, res) => {
     const emailId = req.params.id;
-    const userId = req.session.user.id;
+    const userId = req.signedCookies[COOKIE_NAME].id;
 
     try {
         const [result] = await pool.query(
@@ -458,7 +444,9 @@ app.get('/download/:id', isAuthenticated, async (req, res) => {
 const PORT = 8000;
 app.listen(PORT, (err) => {
     if (err) console.error('Error in server setup');
-    console.log('Server listening on Port', PORT);
+    console.info('________________________________')
+    console.info('Server listening on Port', PORT);
+    console.info('________________________________')
 });
 
 module.exports = app;
