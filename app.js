@@ -46,6 +46,14 @@ app.get('/', (req, res) => {
     }
 });
 
+app.get('/signin', (req, res) => {
+    if (req.signedCookies[COOKIE_NAME]) {
+        return res.redirect('inbox');
+    } else {
+        return res.render('signin');
+    }
+})
+
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -53,7 +61,11 @@ app.post('/login', async (req, res) => {
         const [users] = await pool.query(`SELECT * FROM users WHERE email = ?`, [email]);
 
         if (users.length && await password === users[0].password) {
-            res.cookie(COOKIE_NAME, { id: users[0].id, email: users[0].email }, {
+            res.cookie(COOKIE_NAME, {
+                id: users[0].id,
+                email: users[0].email,
+                full_name: users[0].full_name
+            }, {
                 httpOnly: true,
                 maxAge: 24 * 60 * 60 * 1000,
                 signed: true
@@ -78,7 +90,7 @@ app.post('/register', async (req, res) => {
     if (!rePassword) rePasswordErr = "Passwords do not match";
 
     if (!name && !email && !password && !rePassword) {
-        return res.status(400).render('signup', { err: 'Please fill out all required fields' })
+        return res.status(400).render('signup', { err: 'Please fill out all required fields', nameErr, emailErr, passwordErr, rePasswordErr })
     }
 
     if (!name || !email || !password || !rePassword) {
@@ -99,7 +111,7 @@ app.post('/register', async (req, res) => {
         if (existingUser.length > 0) return res.status(400).render('signup',{ err: 'Email already used' });
 
         await pool.query(`INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)`, [name, email, password]);
-        return res.render('signin', { signedUp: 'Account created successfully!' });
+        return res.render('signup', { signedUp: 'Account created successfully!' });
     } catch (err) {
         console.error('Error during registration:', err);
         return res.status(500).render('500');
@@ -172,7 +184,7 @@ app.get('/inbox', isAuthenticated, async (req, res) => {
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('inbox', { user: user.email, emails, currentPage: page, pages: totalPages });
+        return res.render('inbox', { user: user.full_name, emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching inbox:', err);
         return res.status(500).render('500');
@@ -245,7 +257,7 @@ app.get('/outbox', isAuthenticated, async (req, res) => {
         const totalEmails = countResult[0].count;
         const totalPages = Math.ceil(totalEmails / limit);
 
-        return res.render('outbox', { user: user.email, emails, currentPage: page, pages: totalPages });
+        return res.render('outbox', { user: user.full_name, emails, currentPage: page, pages: totalPages });
     } catch (err) {
         console.error('Error fetching outbox:', err);
         return res.status(500).render('500');
@@ -256,7 +268,7 @@ app.get('/compose', isAuthenticated, async (req, res) => {
     const loggedInUser = req.signedCookies[COOKIE_NAME];
     try {
         const [users] = await pool.query('SELECT id, full_name FROM users WHERE id != ?', [loggedInUser.id]);
-        return res.render('compose', { user: loggedInUser.email, users, loggedInUser: loggedInUser.id });
+        return res.render('compose', { user: loggedInUser.full_name, users, loggedInUser: loggedInUser.id });
     } catch (err) {
         console.error('Error fetching users for compose:', err);
         return res.status(500).render('500');
@@ -275,16 +287,16 @@ app.post('/compose', isAuthenticated, async (req, res) => {
             `INSERT INTO emails (sender_id, receiver_id, subject, body, attachment_path) VALUES (?, ?, ?, ?, ?)`,
             [sender_id, receiver_id, subject || '(no subject)', body, attachmentPath]
         );
-        return res.render('compose', { user: user.email, success: 'Email sent successfully!' });
+        return res.render('compose', { user: user.full_name, success: 'Email sent successfully!' });
     } catch (err) {
         console.error('Error sending email:', err);
-        return res.render('compose', { user: user.email, err: 'Server error, unable to send email.' });
+        return res.render('compose', { user: user.full_name, err: 'Server error, unable to send email.' });
     }
 });
 
 app.post('/send-email', isAuthenticated, upload.single('attachment'), async (req, res) => {
     const { recipient, subject, body } = req.body;
-    const loggedInUser = req.signedCookies[COOKIE_NAME].email;
+    const loggedInUser = req.signedCookies[COOKIE_NAME].full_name;
     const sender_id = req.signedCookies[COOKIE_NAME].id;
 
     try {
@@ -420,7 +432,7 @@ app.get('/emails/:id', isAuthenticated, async (req, res) => {
         const [sender] = await pool.query(`SELECT * FROM users WHERE id = ?`, [senderId]);
         const senderName = sender[0].full_name;
 
-        return res.render('emailDetail', { user: user.email, sender_name: senderName, email: emailDetails, attachmentPath: emailDetails.attachment_path });
+        return res.render('emailDetail', { user: user.full_name, sender_name: senderName, email: emailDetails, attachmentPath: emailDetails.attachment_path });
     } catch (err) {
         console.error('Error fetching email details:', err);
         return res.status(500).render('500');
@@ -464,7 +476,7 @@ app.get('/signin', (req, res) => {
 app.get('/home', (req, res) => {
     const user = req.signedCookies[COOKIE_NAME];
     if (user) {
-        return res.render('home', { user: user.email });
+        return res.render('home', { user: user.full_name });
     } else {
         return res.render('home', { user: undefined });
     }

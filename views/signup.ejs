@@ -50,6 +50,10 @@
             color: red;
         }
 
+        .success {
+            color: green;
+        }
+
         h2 {
             text-align: center;
         }
@@ -143,12 +147,25 @@
             <br>
         <% } %>
 
-        <br>
         <% var err; if (err) { %>
+            <br>
             <div class="error"><%= err %></div>
             <br>
         <% } %>
 
+        <% var signedUp; if (signedUp) { %>
+            <br>
+            <div class="success" style="align-content: center">
+                <%= signedUp %>
+            </div>
+            <br>
+            <a href="/signin" class="button" style="align-content: center">
+                Click here to sign in!
+            </a>
+            <br>
+        <% } %>
+
+        <br>
         <button type="submit">Create Account</button>
     </form>
 
