@@ -26,7 +26,7 @@ const isAuthenticated = (req, res, next) => {
     if (req.signedCookies[COOKIE_NAME]) {
         return next();
     } else {
-        return res.status(401).render('401');
+        return res.status(403).render('403');
     }
 };
 
@@ -483,10 +483,10 @@ app.get('/home', (req, res) => {
 });
 
 /**
- * Test 401 error page
+ * Test 403 error page
  */
 app.get('/access_denied', (req, res) => {
-    return res.render('401');
+    return res.render('403');
 });
 
 /**

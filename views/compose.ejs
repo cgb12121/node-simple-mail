@@ -39,12 +39,11 @@
 
         .container {
             width: 600px;
-            margin: auto;
             padding: 20px;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-top: 50px;
+            margin: 50px auto auto;
         }
 
         h2 {
@@ -54,21 +53,25 @@
         label {
             display: block;
             margin-bottom: 5px;
+            font-weight: bold;
         }
 
         input[type="text"],
         textarea,
-        input[type="file"] {
+        input[type="file"],
+        select {
             width: calc(100% - 20px);
             padding: 10px;
             margin-bottom: 15px;
             border-radius: 5px;
             border: 1px solid #ccc;
             transition: border-color 0.3s;
+            font-size: 14px;
         }
 
         input[type="text"]:focus,
-        textarea:focus {
+        textarea:focus,
+        select:focus {
             border-color: #007bff;
             outline: none;
         }
@@ -82,6 +85,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
         }
 
         button:hover {
@@ -90,6 +94,7 @@
 
         .error {
             color: red;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -115,7 +120,12 @@
     <form id="upload" action="/send-email" method="POST" enctype="multipart/form-data">
 
         <label for='recipient'>To:</label>
-        <input type='text' id='recipient' name='recipient' required placeholder="Enter recipient email">
+        <select id='recipient' name='recipient' required>
+            <option value="" disabled selected>Select a recipient</option>
+            <% users.forEach(user => { %>
+            <option value="<%= user.id %>"><%= user.full_name %></option>
+            <% }); %>
+        </select>
 
         <label for='subject'>Subject:</label>
         <input type='text' id='subject' name='subject' placeholder="Enter subject">
